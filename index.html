@@ -25,6 +25,10 @@
 .usd-result{background:#fff;border:1.5px solid var(--line);border-radius:15px;padding:15px;margin-top:12px;text-align:right;font-size:16px;font-weight:850;min-height:54px}
 .buttons{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:15px}.primary,.secondary{border:0;border-radius:14px;min-height:51px;padding:0 16px;font-size:13px;font-weight:850;cursor:pointer}.primary{background:var(--navy);color:#fff}.secondary{background:#eef2f7;color:#334155}
 .hidden{display:none!important}
+.calc-key{border:1px solid #e2e8f0;background:#f8fafc;color:#111827;border-radius:12px;min-height:49px;font-size:16px;font-weight:800;cursor:pointer}
+.calc-key.operator{background:#eaf4ff;border-color:#cfe5ff;color:#075db4}
+.calc-key.equals{background:#080f20;border-color:#080f20;color:#fff}
+.calc-key:active{transform:scale(.97)}
 @media(max-width:380px){.top{padding:22px 14px}.main{padding:18px 12px}.panel{padding:15px}.top-actions{gap:5px}.pill{padding:12px 9px}.choice{padding:11px 10px;font-size:13px}}
 </style>
 </head>
@@ -36,6 +40,10 @@
 </header>
 <main class="main">
  <div class="intro"><div><h2>Commission Calculator</h2><p>Use ready-made buttons or switch to Manual to enter an approximate amount.</p></div><div class="intro-icon">🧮</div></div>
+ <section class="panel" style="background:#eff6ff;border:2px solid #1687ff;padding:17px 18px;margin-bottom:15px">
+  <div style="font-size:11px;font-weight:850;letter-spacing:.8px;color:#075db4;text-transform:uppercase">Selected Amount</div>
+  <div id="amountHighlightValue" style="font-size:clamp(27px,7vw,36px);font-weight:900;letter-spacing:-.8px;color:#0b1220;margin-top:5px;overflow-wrap:anywhere">0 EGP</div>
+ </section>
  <section class="panel">
   <div class="heading">Deal Value (EGP)</div>
   <input class="input" id="amountInput" inputmode="decimal" placeholder="Enter approximate amount" aria-label="Deal value in EGP">
@@ -56,6 +64,20 @@
   <div class="usd-result">USD Equivalent: <span id="usdResult">—</span></div>
  </section>
  <div class="buttons"><button class="primary" id="calculate">Calculate Commission</button><button class="secondary" id="reset">Reset</button></div>
+ <section class="panel" style="margin-top:18px">
+  <div class="card-head"><h2>Standard Calculator</h2><span class="step">BASIC</span></div>
+  <div style="background:#f7f9fc;border:1px solid #e2e8f0;border-radius:14px;padding:16px;text-align:right;margin-bottom:12px;min-height:76px;overflow-wrap:anywhere">
+   <div id="calcExpression" style="font-size:11px;color:#64748b;min-height:16px"></div>
+   <div id="calcValue" style="font-size:28px;font-weight:850;color:#111827;margin-top:4px">0</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+   <button class="calc-key" data-key="AC">AC</button><button class="calc-key" data-key="DEL">DEL</button><button class="calc-key" data-key="%">%</button><button class="calc-key operator" data-key="÷">÷</button>
+   <button class="calc-key" data-key="7">7</button><button class="calc-key" data-key="8">8</button><button class="calc-key" data-key="9">9</button><button class="calc-key operator" data-key="×">×</button>
+   <button class="calc-key" data-key="4">4</button><button class="calc-key" data-key="5">5</button><button class="calc-key" data-key="6">6</button><button class="calc-key operator" data-key="-">−</button>
+   <button class="calc-key" data-key="1">1</button><button class="calc-key" data-key="2">2</button><button class="calc-key" data-key="3">3</button><button class="calc-key operator" data-key="+">+</button>
+   <button class="calc-key" data-key="0" style="grid-column:span 2">0</button><button class="calc-key" data-key=".">.</button><button class="calc-key equals" data-key="=">=</button>
+  </div>
+ </section>
 </main>
 </div>
 <script>
@@ -70,6 +92,7 @@ function rateButtonsClear(){document.querySelectorAll('[data-rate]').forEach(b=>
 function update(){
  const amount=parse(amountInput.value),rate=Math.min(50,parse(rateInput.value)),commission=amount*rate/100,fx=parse(exchange.value);
  $('commission').textContent=fmt(commission)+' EGP';
+ if($('amountHighlightValue')) $('amountHighlightValue').textContent=fmt(amount)+' EGP';
  $('rateDisplay').textContent=fx?fmt(fx):'—';
  $('usdResult').textContent=fx?fmt(commission/fx)+' USD':'—';
 }
@@ -137,6 +160,29 @@ $('reset').addEventListener('click',()=>{
  setMode('smart');update();
 });
 setMode('smart');update();
+
+// Independent four-function calculator.
+let calcCurrent='0',calcStored=null,calcOperator=null,calcFresh=false,calcExpression='';
+function renderCalc(){ $('calcValue').textContent=calcCurrent; $('calcExpression').textContent=calcExpression; }
+function compute(a,b,op){ if(op==='+')return a+b;if(op==='-')return a-b;if(op==='×')return a*b;if(op==='÷')return b===0?NaN:a/b;return b; }
+document.querySelectorAll('.calc-key').forEach(btn=>btn.addEventListener('click',()=>{
+ const k=btn.dataset.key;
+ if(k==='AC'){calcCurrent='0';calcStored=null;calcOperator=null;calcFresh=false;calcExpression='';}
+ else if(k==='DEL'){calcCurrent=calcCurrent.length>1?calcCurrent.slice(0,-1):'0';calcFresh=false;}
+ else if(k==='.'){if(calcFresh){calcCurrent='0.';calcFresh=false;}else if(!calcCurrent.includes('.'))calcCurrent+='.';}
+ else if(['+','-','×','÷'].includes(k)){
+  const value=Number(calcCurrent);
+  if(calcStored!==null&&calcOperator&&!calcFresh){const r=compute(calcStored,value,calcOperator);calcCurrent=Number.isFinite(r)?String(Number(r.toFixed(8))):'Error';}
+  calcStored=Number(calcCurrent);calcOperator=k;calcExpression=calcCurrent+' '+k;calcFresh=true;
+ }else if(k==='%'){calcCurrent=String(Number(calcCurrent)/100);calcFresh=true;}
+ else if(k==='='){
+  if(calcStored!==null&&calcOperator){const a=calcStored,b=Number(calcCurrent),r=compute(a,b,calcOperator);calcExpression=a+' '+calcOperator+' '+b+' =';calcCurrent=Number.isFinite(r)?String(Number(r.toFixed(8))):'Error';calcStored=null;calcOperator=null;calcFresh=true;}
+ }else if(/^\d$/.test(k)){
+  if(calcFresh||calcCurrent==='0'||calcCurrent==='Error'){calcCurrent=k;calcFresh=false;}else if(calcCurrent.length<15)calcCurrent+=k;
+ }
+ renderCalc();
+}));
+renderCalc();
 })();
 </script>
 </body></html>
